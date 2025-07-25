@@ -24,14 +24,14 @@
           "assignments": [
             {
               "id": "a72da646-0442-4ba8-ad4c-77974c32bc2e",
-              "name": "resume_text",
-              "value": "={{ $json.resume_text }}",
+              "name": "=resume_text",
+              "value": "={{ $json.body.resume_text }}",
               "type": "string"
             },
             {
               "id": "a21d6699-95c4-4b82-8b02-4d69151803a4",
               "name": "job_description",
-              "value": "={{ $json.job_description }}",
+              "value": "={{ $json.body.job_description }}",
               "type": "string"
             }
           ]
@@ -186,7 +186,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "0127fa50-e301-419f-8eab-6877fe3bcd9f",
+  "versionId": "2a16026e-e07e-4d1c-bc61-48362f7b7711",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "c8329a12db00ffd90b1b64a422b7a18d117d3f9be81b183743c8d9a838711ad7"
