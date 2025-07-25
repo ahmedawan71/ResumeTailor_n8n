@@ -1,0 +1,196 @@
+{
+  "name": "Tailor Resume 2nd Approach",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tailor-resume",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ba69ea7a-3a95-4ac3-9617-24decfce097c",
+      "name": "Start",
+      "webhookId": "3ab6c0ba-47a4-4e66-818e-34070baa8292"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a72da646-0442-4ba8-ad4c-77974c32bc2e",
+              "name": "resume_text",
+              "value": "={{ $json.resume_text }}",
+              "type": "string"
+            },
+            {
+              "id": "a21d6699-95c4-4b82-8b02-4d69151803a4",
+              "name": "job_description",
+              "value": "={{ $json.job_description }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "2dc2dbcf-183a-4c43-803f-c951465d9aea",
+      "name": "Extract Input Data"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini-2024-07-18",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI-2024-07-18"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a professional resume tailoring expert. Your task is to analyze a resume and job description, then create a tailored version of the resume that better matches the job requirements.\n\nInstructions:\n1. Analyze the job description to identify key skills, qualifications, and requirements\n2. Review the original resume content\n3. Tailor the resume by:\n   - Emphasizing relevant skills and experiences\n   - Adjusting language to match job keywords\n   - Reordering sections for better alignment\n   - Highlighting achievements that relate to the role\n4. Provide constructive feedback on the changes made\n\nIMPORTANT: You must respond with valid JSON in exactly this format:\n{\n  \"tailored_text\": \"The complete tailored resume text here\",\n  \"feedback\": \"Detailed explanation of changes made and recommendations\"\n}\n\nDo not include any text outside of this JSON structure."
+            },
+            {
+              "content": "Original Resume:\n{{ $('Extract Input Data').item(0).$node[\"resume_text\"].json }}\n\nJob Description:\n{{ $('Extract Input Data').item(0).$node[\"job_description\"].json }}\n\nPlease tailor this resume for the job and provide feedback."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        368,
+        -16
+      ],
+      "id": "a74f5f00-4661-49bb-93b8-e954b116201a",
+      "name": "Main Processing",
+      "credentials": {
+        "openAiApi": {
+          "id": "4jFxhjMTW5se4QAl",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the AI response - handle different possible structures\nconst inputData = $input.first().json;\nlet aiResponse;\n\n// Check different possible response structures from AI Agent\nif (inputData.output) {\n  // If using AI Agent node with 'output' field\n  aiResponse = inputData.output;\n} else if (inputData.message && inputData.message.content) {\n  // If the structure has message.content (like your example)\n  aiResponse = inputData.message.content;\n} else if (inputData.content) {\n  // Direct content field\n  aiResponse = inputData.content;\n} else if (inputData[0] && inputData[0].message && inputData[0].message.content) {\n  // If it's an array with message content (like your example)\n  aiResponse = inputData[0].message.content;\n} else {\n  // Fallback - stringify the entire input\n  aiResponse = JSON.stringify(inputData);\n}\n\n// Safety check\nif (!aiResponse || typeof aiResponse !== 'string') {\n  return [{\n    json: {\n      tailored_text: 'Error: Unable to extract AI response content',\n      feedback: 'Error: Invalid response format from AI',\n      success: false,\n      error: 'Invalid AI response structure',\n      raw_response: JSON.stringify(inputData)\n    }\n  }];\n}\n\ntry {\n  // Try to parse the AI response as JSON\n  let parsedResponse;\n  \n  // Sometimes AI wraps JSON in markdown code blocks\n  if (aiResponse.includes('```json')) {\n    const jsonMatch = aiResponse.match(/```json\\s*([\\s\\S]*?)\\s*```/);\n    if (jsonMatch) {\n      parsedResponse = JSON.parse(jsonMatch[1]);\n    } else {\n      throw new Error('Could not extract JSON from markdown');\n    }\n  } else if (aiResponse.includes('```')) {\n    const jsonMatch = aiResponse.match(/```\\s*([\\s\\S]*?)\\s*```/);\n    if (jsonMatch) {\n      parsedResponse = JSON.parse(jsonMatch[1]);\n    } else {\n      throw new Error('Could not extract JSON from code block');\n    }\n  } else {\n    // Try to parse directly\n    parsedResponse = JSON.parse(aiResponse);\n  }\n  \n  // Validate required fields\n  if (!parsedResponse.tailored_text || !parsedResponse.feedback) {\n    throw new Error('Missing required fields in AI response');\n  }\n  \n  return [{\n    json: {\n      tailored_text: parsedResponse.tailored_text,\n      feedback: parsedResponse.feedback,\n      success: true\n    }\n  }];\n  \n} catch (error) {\n  console.error('Error parsing AI response:', error);\n  \n  // Fallback: try to extract content manually\n  const tailoredText = aiResponse.includes('tailored_text') ? \n    aiResponse.split('\"tailored_text\"')[1]?.split('\"feedback\"')[0]?.replace(/[\":,]/g, '').trim() :\n    'Unable to parse tailored resume. Please try again.';\n    \n  const feedback = aiResponse.includes('feedback') ? \n    aiResponse.split('\"feedback\"')[1]?.split('}')[0]?.replace(/[\":]/g, '').trim() :\n    'Unable to parse feedback. Please review the response manually.';\n  \n  return [{\n    json: {\n      tailored_text: tailoredText || 'Error processing resume. Please try again.',\n      feedback: feedback || 'Error generating feedback. Please try again.',\n      success: false,\n      error: error.message,\n      raw_response: aiResponse\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -16
+      ],
+      "id": "2073a8c3-ebb4-4b2d-9201-5fe56643e89c",
+      "name": "Parse AI Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.response }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1120,
+        -16
+      ],
+      "id": "2db169e9-cc85-4c7e-90ff-3c216851a9c9",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\n\nreturn [{\n  json: {\n    response: {\n      tailored_text: inputData.tailored_text,\n      feedback: inputData.feedback\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        -16
+      ],
+      "id": "c44fc0df-2569-4502-a12d-f351fb4cd70e",
+      "name": "Prepare JSON Response"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Extract Input Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input Data": {
+      "main": [
+        [
+          {
+            "node": "Main Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Main Processing": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Prepare JSON Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare JSON Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0127fa50-e301-419f-8eab-6877fe3bcd9f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c8329a12db00ffd90b1b64a422b7a18d117d3f9be81b183743c8d9a838711ad7"
+  },
+  "id": "vuLGQ7tpXFaTQEIR",
+  "tags": []
+}
